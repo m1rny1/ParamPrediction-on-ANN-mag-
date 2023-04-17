@@ -30,7 +30,7 @@ mdb.models['Model-1'].materials['AL'].Density(table=((2.555e-09, ), ))
 mdb.models['Model-1'].materials['AL'].Elastic(temperatureDependency=ON, table=(
     (56832.9, 0.3468, 300.0), (51416.2, 0.3528, 400.0), (45999.5, 0.3588, 
     500.0)))
-mdb.models['Model-1'].materials['AL'].plastic.setValues(table=((10.0, 0.0, 0.0, 
+mdb.models['Model-1'].materials['AL'].Plastic(rate=ON, temperatureDependency=ON, table=((10.0, 0.0, 0.0, 
     300.0), (26.8, 0.05, 0.0, 300.0), (35.8, 0.1, 0.0, 300.0), (49.8, 0.18, 
     0.0, 300.0), (62.5, 0.26, 0.0, 300.0), (75.2, 0.34, 0.0, 300.0), (88.7, 
     0.41, 0.0, 300.0), (103.4, 0.47, 0.0, 300.0), (119.7, 0.53, 0.0, 300.0), (
@@ -281,7 +281,7 @@ region1=a.instances['Puan_Top-1'].surfaces['Surf-1']
 a = mdb.models['Model-1'].rootAssembly
 region2=a.instances['Hexagon-1'].surfaces['Surf-1']
 mdb.models['Model-1'].SurfaceToSurfaceContactExp(name ='Int-1', 
-    createStepName='Step-1', master = region1, slave = region2, 
+    createStepName='Step-1', main = region1, secondary = region2, 
     mechanicalConstraint=KINEMATIC, sliding=FINITE, 
     interactionProperty='IntProp-1', initialClearance=OMIT, datumAxis=None, 
     clearanceRegion=None)
@@ -291,7 +291,7 @@ region1=a.instances['Puan_bot-1'].surfaces['Surf-1']
 a = mdb.models['Model-1'].rootAssembly
 region2=a.instances['Hexagon-1'].surfaces['Surf-1']
 mdb.models['Model-1'].SurfaceToSurfaceContactExp(name ='Int-2', 
-    createStepName='Step-1', master = region1, slave = region2, 
+    createStepName='Step-1', main = region1, secondary = region2, 
     mechanicalConstraint=KINEMATIC, sliding=FINITE, 
     interactionProperty='IntProp-1', initialClearance=OMIT, datumAxis=None, 
     clearanceRegion=None)
@@ -342,4 +342,3 @@ p1 = mdb.models['Model-1'].parts['Puan_bot']
 session.viewports['Viewport: 1'].setValues(displayedObject=p1)
 mdb.save()
 mdb.jobs['Press_Hex'].submit(consistencyChecking=OFF)
-

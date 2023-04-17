@@ -1,1 +1,0 @@
-# ParamPrediction-on-ANN-mag-

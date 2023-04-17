@@ -13,12 +13,28 @@ import tensorflow as tf
 mpl.rcParams['figure.figsize'] = (8, 6)
 mpl.rcParams['axes.grid'] = True
 
-# MAX_EPOCHS = 600    # кількість епох навчання
-TRAIN_COUNT = 9    # обсяг, що використовується для навчання
-# OUT_STEPS = 1      # кількість прогнозованих кроків
+
+def arg():  # функція для зчитування аргументів запуску з командного рядка (заточена під Excel)
+  parser = argparse.ArgumentParser(description='Forecast next values of time-series from Excel file')
+  parser.add_argument('-f','--file', type=str, default='input.xlsx',
+                      help='Path to xlsx file with data.')
+  parser.add_argument('-s','--sheet', type=int, nargs='+', default=[0],
+                      help='Sheet number. By default using first sheet in file')
+  parser.add_argument('-e','--epoch', type=int, nargs='+', default=[100],
+                      help='Max amount of training. By default using 100 epochs')
+  parser.add_argument('-w','--window', type=int, nargs='+', default=[9],
+                      help='Data window approved values size. By default using 9')
+  parser.add_argument('-c','--castsize', type=int, nargs='+', default=[2],
+                      help='Number of forecasting steps. By default using 2')
+  parser.add_argument('-v','--verbose', type=int, nargs='+', default=[1],
+                      help='Level of describe detailing. By default using 1')  
+  parser.add_argument('-i','--ignoretrainingerrors', type=bool, default=False,
+                      help='Ignore training errors and complete full train amount. By default using False')
+  args = parser.parse_args()
+  return [args.file, args.sheet[0], args.epoch[0], args.window[0], args.castsize[0], args.verbose[0], args.ignoretrainingerrors]
 
 class Dataset():  # клас набору даних, містить у собі вибірки
-  def __init__(self, import_path, need_normalization=False, rawData=False):
+  def __init__(self, import_path, sheet=0, need_normalization=False, rawData=False):
     """Функція-конструктор класу
 
     Args:
@@ -26,7 +42,7 @@ class Dataset():  # клас набору даних, містить у собі
         need_normalization (bool, optional): _description_. Defaults to False.
         rawData (bool, optional): _description_. Defaults to False.
     """
-    self.df, self.plot_cols = self.import_data(import_path, rawData=rawData)   
+    self.df, self.plot_cols = self.import_data(import_path, sheet=sheet, rawData=rawData)   
     self.train_df, self.val_df, self.test_df, self.num_features = self.split(self.df) 
     if(need_normalization == True):
       self.train_df, self.val_df, self.test_df = self.normalize(self.df, self.train_df, self.val_df, self.test_df) 
@@ -162,25 +178,29 @@ class Model():    # клас моделі, містить структуру м�
       ])
       return model
 
-  def compile_and_fit(self, window, patience=20):
+  def compile_and_fit(self, window, patience=20, ignore_training_errors=False):
     model = self.model    
     # колбек, що дозволяє завершити навчання раніше при можливому погіршенні точності моделі (наприклад, при перенасиченості даними)
-    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss',               # відслідковування втрат при навчанні
-                                                      patience=patience,            # чутливість до збільшення втрат (кількість епох, 
-                                                                                    # втрати при навчанні яких більше за попередні, необхідна для переривання навчання)
-                                                      restore_best_weights=True,    # параметр, що повинен повертати модель до ваг, 
-                                                                                    # що були найбільш вдалими, але позитивного ефекту не помітив
-                                                      mode='min')                   # акцент на мінімум втрат
+    if(ignore_training_errors):
+      calls = None
+    else:
+      early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss',               # відслідковування втрат при навчанні
+                                                        patience=patience,            # чутливість до збільшення втрат (кількість епох, 
+                                                                                      # втрати при навчанні яких більше за попередні, необхідна для переривання навчання)
+                                                        restore_best_weights=True,    # параметр, що повинен повертати модель до ваг, 
+                                                                                      # що були найбільш вдалими, але позитивного ефекту не помітив
+                                                        mode='min')                   # акцент на мінімум втрат
+      calls = [early_stopping]
     
     model.compile(loss=tf.losses.MeanSquaredError(),        # втрати обчислюються як середньо-квадратична похибка
                   optimizer=tf.optimizers.Adam(),           # оптимізатор Adam. Детальніше: https://machinelearningmastery.com/adam-optimization-algorithm-for-deep-learning/
                   metrics=[tf.metrics.MeanAbsoluteError()]) # метрика базується на середньо-квадратичній похибці
   
-  # Документація по методу: https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
+    # Документація по методу: https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
     history = model.fit(window.train, epochs=self.max_epoch,  # виконується тренування моделі на основі даних з [window.train]; результат записується у [history]; не більше [MAX_EPOCH] епох
                         validation_data=window.val,           # валідація виконується усередині [window.val]
                         verbose=1,                            # детальність опису процесу навчання
-                        callbacks=[early_stopping])           # можливі до застосування callback'и
+                        callbacks=calls)           # можливі до застосування callback'и
     self.plot_train_history(history, 'Training and validation loss')    # побудова графіку втрат при навчанні
     
     import datetime
@@ -287,7 +307,7 @@ class WindowGenerator():  # клас вікна даних ([обмеженог�
                     c='#ff7f0e', s=64)
       if n == 0:
         plt.legend()
-    plt.xlabel('Ітерація експерименту')
+    plt.xlabel('Крок часу')
     plt.show()
     
   # функція додавання даних до вікна даних (формування робочої вибірки)
@@ -319,7 +339,6 @@ class WindowGenerator():  # клас вікна даних ([обмеженог�
   def example(self):
     """Get and cache an example batch of `inputs, labels` for plotting."""
     result = getattr(self, '_example', None)
-    print("! ", self.train)
     if result is None:
       # No example batch was found, so get one from the `.train` dataset
       result = next(iter(self.train))
@@ -327,28 +346,21 @@ class WindowGenerator():  # клас вікна даних ([обмеженог�
       self._example = result
     return result
 
-def arg():  # функція для зчитування аргументів запуску з командного рядка (заточена під Excel)
-  parser = argparse.ArgumentParser(description='Filter an xlsx-based data')
-  parser.add_argument('-p','--path', type=str, default='input.xlsx',
-                      help='Path to xlsx file with data.')
-  parser.add_argument('-s','--sheet', type=int, nargs='+', default=[0],
-                      help='Sheet number. By default using first sheet in file')
-  args = parser.parse_args()
-  return [args.path, args.sheet[0]]
 
 
-data_path, sheet = arg()  # зчитування аргументів
 
-dataset = Dataset(data_path, sheet)  # створення Dataset
+data_path, sheet, max_epoch, window_size, out_steps, verb, ignore_training_errors = arg()  # зчитування аргументів
+
+dataset = Dataset(data_path, sheet)  # створення Dataset  
 print(repr(dataset))  # опис Dataset
 
-model = Model(out_steps=2, num_features=dataset.num_features) # створення Model
+model = Model(out_steps=out_steps, max_epoch=max_epoch, verbose=verb, num_features=dataset.num_features) # створення Model
 print(repr(model))    # опис Model
 
 multi_window = WindowGenerator(                                 # створення вікна даних
-                                input_width=TRAIN_COUNT,        # вхідна послідовність         
-                                label_width=model.out_steps,          # розглядаєма послідовність
-                                shift=model.out_steps,                # зсув (місце для прогнозу)
+                                input_width=window_size,        # вхідна послідовність         
+                                label_width=out_steps,          # розглядаєма послідовність
+                                shift=out_steps,                # зсув (місце для прогнозу)
                                 dataset=dataset.get_dataset(),  # набір даних
                                 model=model.model)              # модель (для побудови прогнозу)
 print(repr(multi_window))   # опис вікна даних
@@ -356,7 +368,7 @@ print(repr(multi_window))   # опис вікна даних
 multi_window.plot()   # побудова графіку вікна даних
 
 
-history = model.compile_and_fit(multi_window)   # компіляція і тренування моделі
+history = model.compile_and_fit(multi_window, ignore_training_errors=ignore_training_errors)   # компіляція і тренування моделі
 
 IPython.display.clear_output()
 multi_window.plot(model.model)     # побудова графіка отриманих результатів навчання
