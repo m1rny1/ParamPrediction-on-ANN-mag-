@@ -1,8 +1,8 @@
-# ParamPrediction-on-ANN-mag-<br>
+# ParamPrediction-on-ANN-mag- (in development)<br>
 Parameter prediction as time-series forecasting method based on convolutional ANN. <br>
 Program has no GUI so you can use it in CMD.<br>
-As input file you can use XLSX with more than 2 parameters in columns and more than 20 timesteps in rows.<br><br>
-
+As input file you can use XLSX with more than 2 parameters in columns and more than 20 timesteps in rows.<br>
+For example using exported results from Abaqus analysis plastic strain of aluminium hexagon (details in `guide.docx`).<br>
 
 Commandline arguments:
 ```
